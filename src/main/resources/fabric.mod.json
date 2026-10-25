@@ -3,8 +3,8 @@
   "id": "redburst",
   "version": "${version}",
   "name": "Red Burst",
-  "description": "Rode vuurwerk-explosie als je iemand killt.",
+  "description": "Rode vuurwerk-explosie als je FletioX killt.",
   "environment": "*",
   "entrypoints": { "main": ["nl.redburst.RedBurst"] },
-  "depends": { "fabricloader": ">=0.16.0", "minecraft": "1.21.1", "fabric-api": "*" }
+  "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" }
 }
