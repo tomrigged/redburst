@@ -23,7 +23,9 @@ import net.minecraft.util.Identifier;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -36,6 +38,7 @@ public class RedBurst implements ClientModInitializer {
         public int color = 0;
         public boolean sound = true;
         public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
+        public int delay = 2; // vertraging van het vuurwerk t.o.v. het geluid, in ticks (20 ticks = 1 seconde)
     }
 
     public static Config config = new Config();
@@ -87,6 +90,10 @@ public class RedBurst implements ClientModInitializer {
 
     private static final SoundEvent KILL_SOUND = SoundEvent.of(Identifier.of("redburst", "kill"));
     private static final Set<Integer> handled = new HashSet<>();
+    public static final int[] DELAYS = {0, 1, 2, 3, 4, 6, 8, 10};
+
+    // Vuurwerk dat nog op zijn moment wacht: {ticksOver, x, y, z}
+    private static final List<double[]> pending = new ArrayList<>();
 
     private static LivingEntity target;
     private static int hitTick;
@@ -136,8 +143,20 @@ public class RedBurst implements ClientModInitializer {
             }
             if (client.world == null || client.player == null) {
                 handled.clear();
+                pending.clear();
                 target = null;
                 return;
+            }
+
+            // Vuurwerk dat op zijn vertraging wacht
+            Iterator<double[]> it = pending.iterator();
+            while (it.hasNext()) {
+                double[] b = it.next();
+                b[0] -= 1;
+                if (b[0] <= 0) {
+                    explode(b[1], b[2], b[3]);
+                    it.remove();
+                }
             }
 
             if (target != null && tick - hitTick > WINDOW_TICKS) target = null;
@@ -186,10 +205,16 @@ public class RedBurst implements ClientModInitializer {
     }
 
     private static void celebrate(double x, double y, double z) {
-        explode(x, y, z);
+        // Geluid start meteen; het vuurwerk volgt na de ingestelde vertraging,
+        // zodat de klap en het geluid samen te horen zijn.
         if (config.sound) {
             MinecraftClient mc = MinecraftClient.getInstance();
             mc.getSoundManager().play(PositionedSoundInstance.ui(KILL_SOUND, 1.0f, 1.0f));
+        }
+        if (config.delay <= 0) {
+            explode(x, y, z);
+        } else {
+            pending.add(new double[]{config.delay, x, y, z});
         }
     }
 
