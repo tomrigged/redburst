@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "redburst",
+  "id": "Firework kill effect",
   "version": "${version}",
   "name": "Red Burst",
   "description": "Rode vuurwerk-explosie als je iemand killt.",
