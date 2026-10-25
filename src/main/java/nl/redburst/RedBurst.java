@@ -189,7 +189,7 @@ public class RedBurst implements ClientModInitializer {
         explode(x, y, z);
         if (config.sound) {
             MinecraftClient mc = MinecraftClient.getInstance();
-            mc.getSoundManager().play(PositionedSoundInstance.master(KILL_SOUND, 1.0f, 1.0f));
+            mc.getSoundManager().play(PositionedSoundInstance.ui(KILL_SOUND, 1.0f, 1.0f));
         }
     }
 
