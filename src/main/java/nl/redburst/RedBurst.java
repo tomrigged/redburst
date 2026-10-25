@@ -13,7 +13,6 @@ public class RedBurst implements ModInitializer {
     public void onInitialize() {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (!(source.getAttacker() instanceof ServerPlayerEntity)) return;
-            if (!(entity instanceof ServerPlayerEntity)) return;
             if (!(entity.getEntityWorld() instanceof ServerWorld world)) return;
 
             double x = entity.getX();
