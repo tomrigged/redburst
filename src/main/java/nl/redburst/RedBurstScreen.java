@@ -20,16 +20,24 @@ public class RedBurstScreen extends Screen {
         return Text.literal("Bij mobs: " + (RedBurst.config.mobs ? "AAN" : "UIT"));
     }
 
+    private static Text soundText() {
+        return Text.literal("Kill-geluid: " + (RedBurst.config.sound ? "AAN" : "UIT"));
+    }
+
+    private static Text everyoneText() {
+        return Text.literal("Ook doden door anderen/creeper/val: " + (RedBurst.config.everyone ? "AAN" : "UIT"));
+    }
+
     private static Text colorText() {
         return Text.literal("Kleur: " + RedBurst.COLOR_NAMES[RedBurst.config.color]);
     }
 
     @Override
     protected void init() {
-        int w = 220;
+        int w = 260;
         int h = 20;
         int x = this.width / 2 - w / 2;
-        int y = this.height / 2 - 62;
+        int y = this.height / 2 - 90;
 
         ButtonWidget header = ButtonWidget.builder(Text.literal("Red Burst instellingen"), b -> { })
                 .dimensions(x, y, w, h).build();
@@ -54,8 +62,20 @@ public class RedBurstScreen extends Screen {
             b.setMessage(colorText());
         }).dimensions(x, y + 80, w, h).build());
 
+        addDrawableChild(ButtonWidget.builder(soundText(), b -> {
+            RedBurst.config.sound = !RedBurst.config.sound;
+            RedBurst.save();
+            b.setMessage(soundText());
+        }).dimensions(x, y + 105, w, h).build());
+
+        addDrawableChild(ButtonWidget.builder(everyoneText(), b -> {
+            RedBurst.config.everyone = !RedBurst.config.everyone;
+            RedBurst.save();
+            b.setMessage(everyoneText());
+        }).dimensions(x, y + 130, w, h).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Klaar"), b -> close())
-                .dimensions(x, y + 115, w, h).build());
+                .dimensions(x, y + 165, w, h).build());
     }
 
     @Override

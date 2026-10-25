@@ -13,13 +13,19 @@ import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.component.type.FireworkExplosionComponent;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Identifier;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class RedBurst implements ClientModInitializer {
 
@@ -28,6 +34,8 @@ public class RedBurst implements ClientModInitializer {
         public boolean players = true;
         public boolean mobs = false;
         public int color = 0;
+        public boolean sound = true;
+        public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
     }
 
     public static Config config = new Config();
@@ -77,6 +85,9 @@ public class RedBurst implements ClientModInitializer {
     // ===== Kill-detectie =====
     private static final int WINDOW_TICKS = 100; // 5 seconden na je laatste klap
 
+    private static final SoundEvent KILL_SOUND = SoundEvent.of(Identifier.of("redburst", "kill"));
+    private static final Set<Integer> handled = new HashSet<>();
+
     private static LivingEntity target;
     private static int hitTick;
     private static int tick;
@@ -97,7 +108,7 @@ public class RedBurst implements ClientModInitializer {
                         .then(ClientCommandManager.literal("test").executes(ctx -> {
                             MinecraftClient mc = MinecraftClient.getInstance();
                             if (mc.player != null) {
-                                explode(mc.player.getX(), mc.player.getY() + 1.5, mc.player.getZ());
+                                celebrate(mc.player.getX(), mc.player.getY() + 1.5, mc.player.getZ());
                             }
                             return 1;
                         }))));
@@ -117,26 +128,44 @@ public class RedBurst implements ClientModInitializer {
             return ActionResult.PASS;
         });
 
-        // Kijk elke tick of je doelwit dood is
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             tick++;
             if (openScreen) {
                 openScreen = false;
                 client.setScreen(new RedBurstScreen(null));
             }
-            if (target == null || client.world == null) return;
-            if (tick - hitTick > WINDOW_TICKS) {
+            if (client.world == null || client.player == null) {
+                handled.clear();
                 target = null;
                 return;
             }
-            if (target.getHealth() <= 0.0f) {
-                explode(lx, ly, lz);
-                target = null;
-                return;
+
+            if (target != null && tick - hitTick > WINDOW_TICKS) target = null;
+            if (target != null && target.getHealth() > 0.0f) {
+                lx = target.getX();
+                ly = target.getY() + target.getHeight() / 2.0;
+                lz = target.getZ();
             }
-            lx = target.getX();
-            ly = target.getY() + target.getHeight() / 2.0;
-            lz = target.getZ();
+
+            // Vergeet entities die niet meer bestaan
+            handled.removeIf(id -> client.world.getEntityById(id) == null);
+
+            // Zoek alles wat nu doodgaat
+            for (Entity e : client.world.getEntities()) {
+                if (!(e instanceof LivingEntity living)) continue;
+                if (living == client.player) continue;
+                if (living.getHealth() > 0.0f) continue;
+                if (!handled.add(living.getId())) continue; // al afgehandeld
+
+                boolean mine = (living == target);
+                boolean isPlayer = living instanceof PlayerEntity;
+                boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
+                if (mine) target = null;
+                if (!typeOn) continue;
+                if (!mine && !config.everyone) continue;
+
+                celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+            }
         });
 
         // Reserve: sommige servers geven geen gezondheid door, dan lezen we de kill-melding
@@ -149,10 +178,19 @@ public class RedBurst implements ClientModInitializer {
             String me = mc.player.getName().getString();
             String them = target.getName().getString();
             if (text.contains(me) && text.contains(them)) {
-                explode(lx, ly, lz);
+                handled.add(target.getId());
+                celebrate(lx, ly, lz);
                 target = null;
             }
         });
+    }
+
+    private static void celebrate(double x, double y, double z) {
+        explode(x, y, z);
+        if (config.sound) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            mc.getSoundManager().play(PositionedSoundInstance.master(KILL_SOUND, 1.0f, 1.0f));
+        }
     }
 
     // ===== Het vuurwerk =====
