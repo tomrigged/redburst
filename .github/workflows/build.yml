@@ -17,5 +17,5 @@ jobs:
       - run: gradle build
       - uses: actions/upload-artifact@v4
         with:
-          name: redburst-mod
-          path: build/libs/redburst-1.0.0.jar
+          name: TomaxMC-Kill-Effect
+          path: build/libs/tomaxmckilleffect-1.0.0.jar
