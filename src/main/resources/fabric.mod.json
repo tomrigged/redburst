@@ -5,6 +5,7 @@
   "name": "Red Burst",
   "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /redburst.",
   "environment": "client",
+  "mixins": ["redburst.mixins.json"],
   "entrypoints": {
     "client": ["nl.redburst.RedBurst"],
     "modmenu": ["nl.redburst.ModMenuIntegration"]
