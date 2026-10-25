@@ -3,7 +3,7 @@
   "id": "Firework kill effect",
   "version": "${version}",
   "name": "Red Burst",
-  "description": "Rode vuurwerk-explosie als je iemand killt.",
+  "description": "firework explosion when killing someone.",
   "environment": "client",
   "entrypoints": { "client": ["nl.redburst.RedBurst"] },
   "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" }
