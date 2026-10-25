@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -39,6 +40,12 @@ public class RedBurst implements ClientModInitializer {
         public boolean sound = true;
         public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
         public int delay = 2; // vertraging van het vuurwerk t.o.v. het geluid, in ticks (20 ticks = 1 seconde)
+        // Effecten die de SERVER bij een kill stuurt verbergen
+        public boolean hideFireworks = true;
+        public boolean hideLightning = true;
+        public boolean hideParticles = true;
+        public boolean hideSounds = true;
+        public int hideSeconds = 25; // hoe lang na een dood de server-effecten verborgen blijven
     }
 
     public static Config config = new Config();
@@ -92,12 +99,32 @@ public class RedBurst implements ClientModInitializer {
     private static final Set<Integer> handled = new HashSet<>();
     public static final int[] DELAYS = {0, 1, 2, 3, 4, 6, 8, 10};
 
+    // Plekken waar net iemand doodging: server-deeltjes/geluiden daar worden verborgen
+    public static final int[] DURATIONS = {5, 10, 20, 25, 30, 45, 60}; // seconden
+    private static final double ZONE_RADIUS = 12.0; // blokken
+    private static final List<double[]> zones = new CopyOnWriteArrayList<>(); // {tick, x, y, z}
+
+    public static void addZone(double x, double y, double z) {
+        zones.add(new double[]{tick, x, y, z});
+    }
+
+    public static boolean inZone(double x, double y, double z) {
+        int now = tick;
+        int maxAge = Math.max(1, config.hideSeconds) * 20;
+        zones.removeIf(zn -> now - zn[0] > maxAge);
+        for (double[] zn : zones) {
+            double dx = zn[1] - x, dy = zn[2] - y, dz = zn[3] - z;
+            if (dx * dx + dy * dy + dz * dz <= ZONE_RADIUS * ZONE_RADIUS) return true;
+        }
+        return false;
+    }
+
     // Vuurwerk dat nog op zijn moment wacht: {ticksOver, x, y, z}
     private static final List<double[]> pending = new ArrayList<>();
 
     private static LivingEntity target;
     private static int hitTick;
-    private static int tick;
+    public static volatile int tick;
     private static double lx, ly, lz;
     private static boolean openScreen = false;
 
@@ -144,6 +171,7 @@ public class RedBurst implements ClientModInitializer {
             if (client.world == null || client.player == null) {
                 handled.clear();
                 pending.clear();
+                zones.clear();
                 target = null;
                 return;
             }
@@ -175,6 +203,9 @@ public class RedBurst implements ClientModInitializer {
                 if (living == client.player) continue;
                 if (living.getHealth() > 0.0f) continue;
                 if (!handled.add(living.getId())) continue; // al afgehandeld
+                if (living instanceof PlayerEntity) {
+                    addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+                }
 
                 boolean mine = (living == target);
                 boolean isPlayer = living instanceof PlayerEntity;
