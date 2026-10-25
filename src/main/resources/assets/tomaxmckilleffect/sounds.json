@@ -1,0 +1,7 @@
+{
+  "kill": {
+    "sounds": [
+      { "name": "tomaxmckilleffect:kill", "stream": false, "preload": true }
+    ]
+  }
+}

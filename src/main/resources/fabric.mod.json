@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "redburst",
+  "id": "tomaxmckilleffect",
   "version": "${version}",
-  "name": "Red Burst",
-  "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /redburst.",
+  "name": "TomaxMC Kill Effect",
+  "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /tomaxmc.",
   "environment": "client",
-  "mixins": ["redburst.mixins.json"],
+  "mixins": ["tomaxmckilleffect.mixins.json"],
   "entrypoints": {
-    "client": ["nl.redburst.RedBurst"],
-    "modmenu": ["nl.redburst.ModMenuIntegration"]
+    "client": ["nl.tomaxmc.TomaxMCKillEffect"],
+    "modmenu": ["nl.tomaxmc.ModMenuIntegration"]
   },
   "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" },
   "suggests": { "modmenu": "*" }
