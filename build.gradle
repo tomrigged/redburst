@@ -2,8 +2,8 @@ plugins {
     id 'fabric-loom' version '1.14-SNAPSHOT'
 }
 version = project.mod_version
-group = 'nl.redburst'
-base { archivesName = 'redburst' }
+group = 'nl.tomaxmc'
+base { archivesName = 'tomaxmckilleffect' }
 repositories {
     maven { url = 'https://maven.terraformersmc.com/' }
 }

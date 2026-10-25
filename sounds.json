@@ -1,7 +1,7 @@
 {
   "kill": {
     "sounds": [
-      { "name": "redburst:kill", "stream": false, "preload": true }
+      { "name": "tomaxmckilleffect:kill", "stream": false, "preload": true }
     ]
   }
 }

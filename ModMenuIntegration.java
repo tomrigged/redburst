@@ -1,4 +1,4 @@
-package nl.redburst;
+package nl.tomaxmc;
 
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
@@ -6,6 +6,6 @@ import com.terraformersmc.modmenu.api.ModMenuApi;
 public class ModMenuIntegration implements ModMenuApi {
     @Override
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
-        return RedBurstScreen::new;
+        return TomaxMCKillEffectScreen::new;
     }
 }
