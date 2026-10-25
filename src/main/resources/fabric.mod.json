@@ -1,10 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "Firework kill effect",
+  "id": "redburst",
   "version": "${version}",
   "name": "Red Burst",
-  "description": "firework explosion when killing someone.",
+  "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /redburst.",
   "environment": "client",
-  "entrypoints": { "client": ["nl.redburst.RedBurst"] },
-  "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" }
+  "entrypoints": {
+    "client": ["nl.redburst.RedBurst"],
+    "modmenu": ["nl.redburst.ModMenuIntegration"]
+  },
+  "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" },
+  "suggests": { "modmenu": "*" }
 }
