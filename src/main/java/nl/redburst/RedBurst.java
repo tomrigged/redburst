@@ -1,16 +1,37 @@
 package nl.redburst;
 
+import it.unimi.dsi.fastutil.ints.IntList;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
-import net.minecraft.particle.DustParticleEffect;
-import net.minecraft.particle.ParticleTypes;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.FireworkExplosionComponent;
+import net.minecraft.component.type.FireworksComponent;
+import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.random.Random;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 public class RedBurst implements ModInitializer {
     // false = ook bij mobs (om te testen), true = alleen als je een speler killt
     private static final boolean ONLY_PLAYERS = false;
+
+    private static class Pending {
+        final ServerWorld world;
+        final FireworkRocketEntity rocket;
+        int ticks = 3;
+        Pending(ServerWorld world, FireworkRocketEntity rocket) {
+            this.world = world;
+            this.rocket = rocket;
+        }
+    }
+
+    private static final List<Pending> PENDING = new ArrayList<>();
 
     @Override
     public void onInitialize() {
@@ -22,35 +43,40 @@ public class RedBurst implements ModInitializer {
             double x = entity.getX();
             double y = entity.getY() + entity.getHeight() / 2.0;
             double z = entity.getZ();
-            Random r = world.getRandom();
 
-            DustParticleEffect red = new DustParticleEffect(0xFF0000, 2.0f);
-            DustParticleEffect darkRed = new DustParticleEffect(0xAA0000, 1.4f);
-            DustParticleEffect orange = new DustParticleEffect(0xFF4000, 1.2f);
+            // Drie rode explosies tegelijk
+            FireworkExplosionComponent bol = new FireworkExplosionComponent(
+                    FireworkExplosionComponent.Type.LARGE_BALL,
+                    IntList.of(0xFF0000, 0xCC0000), IntList.of(0x550000), true, true);
+            FireworkExplosionComponent burst = new FireworkExplosionComponent(
+                    FireworkExplosionComponent.Type.BURST,
+                    IntList.of(0xFF0000, 0xFF3300), IntList.of(0x880000), true, false);
+            FireworkExplosionComponent ster = new FireworkExplosionComponent(
+                    FireworkExplosionComponent.Type.STAR,
+                    IntList.of(0xFF1111), IntList.of(0x330000), false, true);
 
-            // Grote, volle rode wolk
-            for (int i = 0; i < 600; i++) {
-                double dx = r.nextGaussian() * 1.3;
-                double dy = r.nextGaussian() * 1.3;
-                double dz = r.nextGaussian() * 1.3;
-                DustParticleEffect type = (i % 3 == 0) ? darkRed : (i % 3 == 1) ? red : orange;
-                world.spawnParticles(type, x + dx, y + dy, z + dz, 1, 0, 0, 0, 0);
+            ItemStack stack = new ItemStack(Items.FIREWORK_ROCKET);
+            // Lange vliegtijd, zodat de raket zelf nooit ontploft (dat zou schade doen)
+            stack.set(DataComponentTypes.FIREWORKS,
+                    new FireworksComponent(100, List.of(bol, burst, ster)));
+
+            FireworkRocketEntity rocket = new FireworkRocketEntity(world, x, y, z, stack);
+            world.spawnEntity(rocket);
+            PENDING.add(new Pending(world, rocket));
+        });
+
+        // Na een paar ticks sturen we alleen het explosie-effect en halen we de raket weg
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            Iterator<Pending> it = PENDING.iterator();
+            while (it.hasNext()) {
+                Pending p = it.next();
+                if (--p.ticks > 0) continue;
+                if (!p.rocket.isRemoved()) {
+                    p.world.sendEntityStatus(p.rocket, (byte) 17);
+                    p.rocket.discard();
+                }
+                it.remove();
             }
-
-            // Vonkjes die in alle richtingen naar buiten schieten
-            for (int i = 0; i < 150; i++) {
-                double dx = r.nextGaussian();
-                double dy = r.nextGaussian();
-                double dz = r.nextGaussian();
-                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 0.001) continue;
-                double speed = 0.4 + r.nextDouble() * 0.4;
-                world.spawnParticles(ParticleTypes.FIREWORK, x, y, z, 0,
-                        dx / len, dy / len, dz / len, speed);
-            }
-
-            // Extra losse vonkjes in het midden
-            world.spawnParticles(ParticleTypes.FIREWORK, x, y, z, 120, 0.2, 0.2, 0.2, 0.45);
         });
     }
 }
