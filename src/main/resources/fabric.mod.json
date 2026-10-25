@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "redburst",
+  "version": "${version}",
+  "name": "Red Burst",
+  "description": "Rode vuurwerk-explosie als je iemand killt.",
+  "environment": "*",
+  "entrypoints": { "main": ["nl.redburst.RedBurst"] },
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "1.21.1", "fabric-api": "*" }
+}
