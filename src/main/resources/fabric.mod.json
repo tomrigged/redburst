@@ -4,6 +4,7 @@
   "version": "${version}",
   "name": "TomaxMC Kill Effect",
   "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /tomaxmc.",
+  "icon": "assets/tomaxmckilleffect/icon.png",
   "environment": "client",
   "mixins": ["tomaxmckilleffect.mixins.json"],
   "entrypoints": {
