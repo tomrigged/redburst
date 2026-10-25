@@ -79,6 +79,19 @@ public class RedBurstScreen extends Screen {
         toggle(right, top + step * 4, colW, () -> Text.literal("Geluid: " + onOff(RedBurst.config.hideSounds)),
                 () -> RedBurst.config.hideSounds = !RedBurst.config.hideSounds);
 
+        toggle(right, top + step * 5, colW, () -> Text.literal("Verberg-duur: " + RedBurst.config.hideSeconds + " sec"),
+                () -> {
+                    int[] d = RedBurst.DURATIONS;
+                    int next = d[0];
+                    for (int v : d) {
+                        if (v > RedBurst.config.hideSeconds) {
+                            next = v;
+                            break;
+                        }
+                    }
+                    RedBurst.config.hideSeconds = next;
+                });
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Klaar"), b -> close())
                 .dimensions(this.width / 2 - 100, top + step * 7 + 5, 200, 20).build());
     }

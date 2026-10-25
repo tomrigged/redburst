@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
@@ -53,9 +54,10 @@ public class ClientPlayNetworkHandlerMixin {
         if (world == null) return;
         Entity entity = packet.getEntity(world);
         if (entity == null) return;
-        if (packet.getStatus() == 3) {
+        if (packet.getStatus() == 3 && entity instanceof PlayerEntity) {
             RedBurst.addZone(entity.getX(), entity.getY() + entity.getHeight() / 2.0, entity.getZ());
-        } else if (packet.getStatus() == 17 && RedBurst.config.hideFireworks
+        }
+        if (packet.getStatus() == 17 && RedBurst.config.hideFireworks
                 && entity instanceof FireworkRocketEntity) {
             ci.cancel();
         }

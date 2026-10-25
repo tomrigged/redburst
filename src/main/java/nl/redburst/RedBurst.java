@@ -45,6 +45,7 @@ public class RedBurst implements ClientModInitializer {
         public boolean hideLightning = true;
         public boolean hideParticles = true;
         public boolean hideSounds = true;
+        public int hideSeconds = 25; // hoe lang na een dood de server-effecten verborgen blijven
     }
 
     public static Config config = new Config();
@@ -99,8 +100,8 @@ public class RedBurst implements ClientModInitializer {
     public static final int[] DELAYS = {0, 1, 2, 3, 4, 6, 8, 10};
 
     // Plekken waar net iemand doodging: server-deeltjes/geluiden daar worden verborgen
-    private static final int ZONE_TICKS = 30;      // 1,5 seconde
-    private static final double ZONE_RADIUS = 8.0; // blokken
+    public static final int[] DURATIONS = {5, 10, 20, 25, 30, 45, 60}; // seconden
+    private static final double ZONE_RADIUS = 12.0; // blokken
     private static final List<double[]> zones = new CopyOnWriteArrayList<>(); // {tick, x, y, z}
 
     public static void addZone(double x, double y, double z) {
@@ -109,7 +110,8 @@ public class RedBurst implements ClientModInitializer {
 
     public static boolean inZone(double x, double y, double z) {
         int now = tick;
-        zones.removeIf(zn -> now - zn[0] > ZONE_TICKS);
+        int maxAge = Math.max(1, config.hideSeconds) * 20;
+        zones.removeIf(zn -> now - zn[0] > maxAge);
         for (double[] zn : zones) {
             double dx = zn[1] - x, dy = zn[2] - y, dz = zn[3] - z;
             if (dx * dx + dy * dy + dz * dz <= ZONE_RADIUS * ZONE_RADIUS) return true;
@@ -201,7 +203,9 @@ public class RedBurst implements ClientModInitializer {
                 if (living == client.player) continue;
                 if (living.getHealth() > 0.0f) continue;
                 if (!handled.add(living.getId())) continue; // al afgehandeld
-                addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+                if (living instanceof PlayerEntity) {
+                    addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+                }
 
                 boolean mine = (living == target);
                 boolean isPlayer = living instanceof PlayerEntity;
