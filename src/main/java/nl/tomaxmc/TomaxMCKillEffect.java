@@ -152,7 +152,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     private static final Map<String, Integer> lastSwing = new HashMap<>();
     private record Death(int tick, String name, double x, double y, double z) { }
     private static final List<Death> recentDeaths = new CopyOnWriteArrayList<>();
-    private static final double FRIEND_RANGE = 10.0; // blokken tussen vriend en slachtoffer
+    private static final double FRIEND_RANGE = 14.0; // blokken tussen vriend en slachtoffer
 
     private static LivingEntity target;
     private static int hitTick;
@@ -189,6 +189,11 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                                                     : n + " staat niet in je lijst."));
                                             return 1;
                                         })))
+                        .then(ClientCommandManager.literal("debug").executes(ctx -> {
+                            debug = !debug;
+                            ctx.getSource().sendFeedback(Text.literal("Debug: " + (debug ? "AAN" : "UIT")));
+                            return 1;
+                        }))
                         .then(ClientCommandManager.literal("list").executes(ctx -> {
                             ctx.getSource().sendFeedback(Text.literal(config.friends.isEmpty()
                                     ? "Je hebt nog geen vrienden toegevoegd."
@@ -230,6 +235,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 zones.clear();
                 lastSwing.clear();
                 recentDeaths.clear();
+                recentChats.clear();
                 target = null;
                 return;
             }
@@ -268,27 +274,8 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             // Zoek alles wat nu doodgaat
             for (Entity e : client.world.getEntities()) {
                 if (!(e instanceof LivingEntity living)) continue;
-                if (living == client.player) continue;
                 if (living.getHealth() > 0.0f) continue;
-                if (!handled.add(living.getId())) continue; // al afgehandeld
-                if (living instanceof PlayerEntity) {
-                    addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
-                }
-
-                boolean mine = (living == target);
-                boolean isPlayer = living instanceof PlayerEntity;
-                boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
-                if (mine) target = null;
-                if (!typeOn) continue;
-                boolean friendKill = !mine && !config.everyone && killedByFriend(client, living);
-                if (!mine && !config.everyone && !friendKill) {
-                    // Bewaar voor de chat-reserve (bijv. vriend schiet met een boog)
-                    recentDeaths.add(new Death(tick, living.getName().getString(),
-                            living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ()));
-                    continue;
-                }
-
-                celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+                handleDeath(client, living);
             }
         });
 
@@ -298,6 +285,8 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.player == null) return;
             String text = message.getString();
+            recentChats.add(new Chat(tick, text.toLowerCase()));
+            recentChats.removeIf(c -> tick - c.tick() > 120);
 
             // Vrienden: kill-melding bevat een vriend en een recent slachtoffer
             if (config.friendsEnabled && !config.friends.isEmpty() && !recentDeaths.isEmpty()) {
@@ -328,15 +317,67 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         });
     }
 
+    public static boolean debug = false;
+    private record Chat(int tick, String lower) { }
+    private static final List<Chat> recentChats = new CopyOnWriteArrayList<>();
+
+    private static void dbg(MinecraftClient client, String msg) {
+        if (debug && client.inGameHud != null) {
+            client.inGameHud.getChatHud().addMessage(Text.literal("[TomaxMC] " + msg));
+        }
+    }
+
+    /** Wordt aangeroepen als er iets doodgaat (via gezondheid of via het dood-pakket van de server). */
+    public static void handleDeath(MinecraftClient client, LivingEntity living) {
+        if (client.world == null || client.player == null) return;
+        if (living == client.player) return;
+        if (!handled.add(living.getId())) return; // al afgehandeld
+        if (living instanceof PlayerEntity) {
+            addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+        }
+
+        boolean mine = (living == target);
+        boolean isPlayer = living instanceof PlayerEntity;
+        boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
+        if (mine) target = null;
+        if (!typeOn) {
+            dbg(client, "Dood: " + living.getName().getString() + " (type staat uit)");
+            return;
+        }
+        boolean friendKill = !mine && !config.everyone && killedByFriend(client, living);
+        dbg(client, "Dood: " + living.getName().getString() + " | van mij: " + mine + " | vriend: " + friendKill);
+        if (!mine && !config.everyone && !friendKill) {
+            // Bewaar voor de chat-reserve (bijv. vriend schiet met een boog)
+            recentDeaths.add(new Death(tick, living.getName().getString(),
+                    living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ()));
+            return;
+        }
+        celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+    }
+
     private static boolean killedByFriend(MinecraftClient client, LivingEntity victim) {
         if (!config.friendsEnabled || config.friends.isEmpty() || client.world == null) return false;
+        String victimName = victim.getName().getString().toLowerCase();
+
+        // 1) Een vriend was in de buurt en zwaaide net
         for (PlayerEntity p : client.world.getPlayers()) {
             if (p == victim || p == client.player) continue;
             String name = p.getName().getString();
             if (!isFriend(name)) continue;
             Integer swung = lastSwing.get(name.toLowerCase());
-            if (swung == null || tick - swung > 10) continue;
-            if (p.squaredDistanceTo(victim) <= FRIEND_RANGE * FRIEND_RANGE) return true;
+            boolean swingingNow = p.handSwinging || p.handSwingProgress > 0.0f;
+            boolean recent = swingingNow || (swung != null && tick - swung <= 25);
+            if (recent && p.squaredDistanceTo(victim) <= FRIEND_RANGE * FRIEND_RANGE) return true;
+        }
+
+        // 2) Er kwam net een chat-melding met een vriend en dit slachtoffer
+        for (Chat c : recentChats) {
+            if (tick - c.tick() > 100) continue;
+            if (!c.lower().contains(victimName)) continue;
+            for (String f : config.friends) {
+                String fl = f.toLowerCase();
+                if (!fl.equals(victimName) && c.lower().contains(fl)) return true;
+            }
         }
         return false;
     }
