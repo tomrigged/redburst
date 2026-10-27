@@ -92,6 +92,11 @@ public class TomaxMCKillEffectScreen extends Screen {
                     TomaxMCKillEffect.config.hideSeconds = next;
                 });
 
+        addDrawableChild(ButtonWidget.builder(
+                Text.literal("Vrienden (" + TomaxMCKillEffect.config.friends.size() + ")..."),
+                b -> { if (this.client != null) this.client.setScreen(new FriendsScreen(this)); })
+                .dimensions(right, top + step * 6, colW, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Klaar"), b -> close())
                 .dimensions(this.width / 2 - 100, top + step * 7 + 5, 200, 20).build());
     }

@@ -1,5 +1,6 @@
 package nl.tomaxmc;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -18,13 +19,16 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.sound.SoundEvent;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
@@ -46,6 +50,9 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         public boolean hideParticles = true;
         public boolean hideSounds = true;
         public int hideSeconds = 25; // hoe lang na een dood de server-effecten verborgen blijven
+        // Vrienden: kills van deze spelers zie je ook
+        public boolean friendsEnabled = true;
+        public List<String> friends = new ArrayList<>();
     }
 
     public static Config config = new Config();
@@ -83,6 +90,25 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         } catch (Exception ignored) {
         }
         if (config.color < 0 || config.color >= COLOR_NAMES.length) config.color = 0;
+        if (config.friends == null) config.friends = new ArrayList<>();
+    }
+
+    public static boolean isFriend(String name) {
+        for (String f : config.friends) if (f.equalsIgnoreCase(name)) return true;
+        return false;
+    }
+
+    public static boolean addFriend(String name) {
+        if (name == null || name.isBlank() || isFriend(name)) return false;
+        config.friends.add(name.trim());
+        save();
+        return true;
+    }
+
+    public static boolean removeFriend(String name) {
+        boolean removed = config.friends.removeIf(f -> f.equalsIgnoreCase(name));
+        if (removed) save();
+        return removed;
     }
 
     public static void save() {
@@ -122,6 +148,12 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     // Vuurwerk dat nog op zijn moment wacht: {ticksOver, x, y, z}
     private static final List<double[]> pending = new ArrayList<>();
 
+    // Wanneer (tick) elke speler voor het laatst zijn arm zwaaide
+    private static final Map<String, Integer> lastSwing = new HashMap<>();
+    private record Death(int tick, String name, double x, double y, double z) { }
+    private static final List<Death> recentDeaths = new CopyOnWriteArrayList<>();
+    private static final double FRIEND_RANGE = 10.0; // blokken tussen vriend en slachtoffer
+
     private static LivingEntity target;
     private static int hitTick;
     public static volatile int tick;
@@ -139,6 +171,30 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                             openScreen = true;
                             return 1;
                         })
+                        .then(ClientCommandManager.literal("add")
+                                .then(ClientCommandManager.argument("naam", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            String n = StringArgumentType.getString(ctx, "naam");
+                                            ctx.getSource().sendFeedback(Text.literal(addFriend(n)
+                                                    ? n + " toegevoegd aan je vrienden."
+                                                    : n + " staat er al in."));
+                                            return 1;
+                                        })))
+                        .then(ClientCommandManager.literal("remove")
+                                .then(ClientCommandManager.argument("naam", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            String n = StringArgumentType.getString(ctx, "naam");
+                                            ctx.getSource().sendFeedback(Text.literal(removeFriend(n)
+                                                    ? n + " verwijderd."
+                                                    : n + " staat niet in je lijst."));
+                                            return 1;
+                                        })))
+                        .then(ClientCommandManager.literal("list").executes(ctx -> {
+                            ctx.getSource().sendFeedback(Text.literal(config.friends.isEmpty()
+                                    ? "Je hebt nog geen vrienden toegevoegd."
+                                    : "Vrienden: " + String.join(", ", config.friends)));
+                            return 1;
+                        }))
                         .then(ClientCommandManager.literal("test").executes(ctx -> {
                             MinecraftClient mc = MinecraftClient.getInstance();
                             if (mc.player != null) {
@@ -172,9 +228,21 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 handled.clear();
                 pending.clear();
                 zones.clear();
+                lastSwing.clear();
+                recentDeaths.clear();
                 target = null;
                 return;
             }
+
+            // Onthoud wanneer spelers zwaaien (om vrienden-kills te herkennen)
+            if (config.friendsEnabled && !config.friends.isEmpty()) {
+                for (PlayerEntity p : client.world.getPlayers()) {
+                    if (p.handSwinging || p.handSwingProgress > 0.0f) {
+                        lastSwing.put(p.getName().getString().toLowerCase(), tick);
+                    }
+                }
+            }
+            recentDeaths.removeIf(d -> tick - d.tick() > 100);
 
             // Vuurwerk dat op zijn vertraging wacht
             Iterator<double[]> it = pending.iterator();
@@ -212,7 +280,13 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
                 if (mine) target = null;
                 if (!typeOn) continue;
-                if (!mine && !config.everyone) continue;
+                boolean friendKill = !mine && !config.everyone && killedByFriend(client, living);
+                if (!mine && !config.everyone && !friendKill) {
+                    // Bewaar voor de chat-reserve (bijv. vriend schiet met een boog)
+                    recentDeaths.add(new Death(tick, living.getName().getString(),
+                            living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ()));
+                    continue;
+                }
 
                 celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
             }
@@ -220,11 +294,30 @@ public class TomaxMCKillEffect implements ClientModInitializer {
 
         // Reserve: sommige servers geven geen gezondheid door, dan lezen we de kill-melding
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            if (overlay || target == null) return;
+            if (overlay) return;
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.player == null) return;
-            if (tick - hitTick > 60) return;
             String text = message.getString();
+
+            // Vrienden: kill-melding bevat een vriend en een recent slachtoffer
+            if (config.friendsEnabled && !config.friends.isEmpty() && !recentDeaths.isEmpty()) {
+                String lower = text.toLowerCase();
+                for (Death d : recentDeaths) {
+                    if (tick - d.tick() > 80) continue;
+                    String victim = d.name().toLowerCase();
+                    if (!lower.contains(victim)) continue;
+                    for (String f : config.friends) {
+                        String fl = f.toLowerCase();
+                        if (fl.equals(victim) || !lower.contains(fl)) continue;
+                        recentDeaths.remove(d);
+                        celebrate(d.x(), d.y(), d.z());
+                        return;
+                    }
+                }
+            }
+
+            if (target == null) return;
+            if (tick - hitTick > 60) return;
             String me = mc.player.getName().getString();
             String them = target.getName().getString();
             if (text.contains(me) && text.contains(them)) {
@@ -233,6 +326,19 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 target = null;
             }
         });
+    }
+
+    private static boolean killedByFriend(MinecraftClient client, LivingEntity victim) {
+        if (!config.friendsEnabled || config.friends.isEmpty() || client.world == null) return false;
+        for (PlayerEntity p : client.world.getPlayers()) {
+            if (p == victim || p == client.player) continue;
+            String name = p.getName().getString();
+            if (!isFriend(name)) continue;
+            Integer swung = lastSwing.get(name.toLowerCase());
+            if (swung == null || tick - swung > 10) continue;
+            if (p.squaredDistanceTo(victim) <= FRIEND_RANGE * FRIEND_RANGE) return true;
+        }
+        return false;
     }
 
     private static void celebrate(double x, double y, double z) {
