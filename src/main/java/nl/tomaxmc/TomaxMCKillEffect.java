@@ -40,7 +40,8 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     public static class Config {
         public boolean players = true;
         public boolean mobs = false;
-        public int color = 0;
+        public int color = 0; // oud (alleen voor oude configs)
+        public List<Integer> mix = null; // gekozen kleuren (index in PALETTE)
         public boolean sound = true;
         public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
         public int delay = 2; // vertraging van het vuurwerk t.o.v. het geluid, in ticks (20 ticks = 1 seconde)
@@ -58,23 +59,40 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     public static Config config = new Config();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    public static final String[] COLOR_NAMES = {
-            "Rood", "Blauw", "Groen", "Geel", "Oranje", "Paars", "Roze", "Wit", "Regenboog"
+    // Kleurenpalet: naam + RGB. Je kunt er meerdere tegelijk aanzetten om te mixen.
+    public static final String[] PALETTE_NAMES = {
+            "Rood", "Lichtrood", "Oranje", "Perzik", "Geel", "Lichtgeel",
+            "Limoen", "Groen", "Mint", "Turquoise", "Cyaan", "Lichtblauw",
+            "Blauw", "Donkerblauw", "Paars", "Lila", "Roze", "Babyroze",
+            "Wit", "Zilver"
     };
-    private static final int[][] COLORS = {
-            {0xFF0000, 0xCC0000, 0xFF3300},
-            {0x0044FF, 0x00AAFF, 0x2222CC},
-            {0x00FF00, 0x22CC22, 0x88FF00},
-            {0xFFFF00, 0xFFCC00, 0xFFEE66},
-            {0xFF8800, 0xFF5500, 0xFFAA33},
-            {0xAA00FF, 0x7700CC, 0xDD66FF},
-            {0xFF55CC, 0xFF88DD, 0xFF2299},
-            {0xFFFFFF, 0xDDDDDD, 0xAAAAFF},
-            {0xFF0000, 0xFFAA00, 0xFFFF00, 0x00FF00, 0x00AAFF, 0xAA00FF}
+    public static final int[] PALETTE = {
+            0xFF0000, 0xFF7777, 0xFF8800, 0xFFBB88, 0xFFFF00, 0xFFFF99,
+            0x88FF00, 0x00DD00, 0x99FFAA, 0x00DDBB, 0x00FFFF, 0x88CCFF,
+            0x0044FF, 0x1111AA, 0xAA00FF, 0xCC99FF, 0xFF55CC, 0xFFAADD,
+            0xFFFFFF, 0xBBBBBB
     };
-    private static final int[] FADES = {
-            0x550000, 0x000055, 0x003300, 0x665500, 0x552200, 0x330055, 0x550033, 0x555555, 0xFFFFFF
+    public static final int[] RAINBOW = {0, 2, 4, 7, 11, 14};
+    // Oude kleurkeuze (0-8) omzetten naar het nieuwe palet
+    private static final int[][] OLD_TO_NEW = {
+            {0}, {12, 11}, {7, 6}, {4, 5}, {2, 3}, {14, 15}, {16, 17}, {18, 19}, RAINBOW
     };
+
+    public static boolean hasColor(int idx) {
+        return config.mix != null && config.mix.contains(idx);
+    }
+
+    public static void toggleColor(int idx) {
+        if (config.mix == null) config.mix = new ArrayList<>();
+        if (!config.mix.remove(Integer.valueOf(idx))) config.mix.add(idx);
+        save();
+    }
+
+    public static void setColors(int... idx) {
+        config.mix = new ArrayList<>();
+        for (int i : idx) config.mix.add(i);
+        save();
+    }
 
     private static Path configPath() {
         return FabricLoader.getInstance().getConfigDir().resolve("tomaxmckilleffect.json");
@@ -89,7 +107,12 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             }
         } catch (Exception ignored) {
         }
-        if (config.color < 0 || config.color >= COLOR_NAMES.length) config.color = 0;
+        if (config.mix == null) {
+            int old = Math.max(0, Math.min(config.color, OLD_TO_NEW.length - 1));
+            config.mix = new ArrayList<>();
+            for (int i : OLD_TO_NEW[old]) config.mix.add(i);
+        }
+        config.mix.removeIf(i -> i == null || i < 0 || i >= PALETTE.length);
         if (config.friends == null) config.friends = new ArrayList<>();
     }
 
@@ -401,9 +424,18 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
 
-        int i = Math.max(0, Math.min(config.color, COLORS.length - 1));
-        IntList colors = new IntArrayList(COLORS[i]);
-        IntList fade = new IntArrayList(new int[]{FADES[i]});
+        IntList colors = new IntArrayList();
+        IntList fade = new IntArrayList();
+        List<Integer> chosen = (config.mix == null || config.mix.isEmpty()) ? List.of(0) : config.mix;
+        for (int idx : chosen) {
+            int c = PALETTE[idx];
+            colors.add(c);
+            // Uitdoof-kleur: een donkerdere versie van dezelfde kleur
+            int r = (int) (((c >> 16) & 0xFF) * 0.4);
+            int g = (int) (((c >> 8) & 0xFF) * 0.4);
+            int bl = (int) ((c & 0xFF) * 0.4);
+            fade.add((r << 16) | (g << 8) | bl);
+        }
 
         FireworkExplosionComponent bol = new FireworkExplosionComponent(
                 FireworkExplosionComponent.Type.LARGE_BALL, colors, fade, true, true);

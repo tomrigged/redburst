@@ -50,8 +50,10 @@ public class TomaxMCKillEffectScreen extends Screen {
                 () -> TomaxMCKillEffect.config.players = !TomaxMCKillEffect.config.players);
         toggle(left, top + step * 2, colW, () -> Text.literal("Bij mobs: " + onOff(TomaxMCKillEffect.config.mobs)),
                 () -> TomaxMCKillEffect.config.mobs = !TomaxMCKillEffect.config.mobs);
-        toggle(left, top + step * 3, colW, () -> Text.literal("Kleur: " + TomaxMCKillEffect.COLOR_NAMES[TomaxMCKillEffect.config.color]),
-                () -> TomaxMCKillEffect.config.color = (TomaxMCKillEffect.config.color + 1) % TomaxMCKillEffect.COLOR_NAMES.length);
+        addDrawableChild(ButtonWidget.builder(
+                Text.literal("Kleuren (" + TomaxMCKillEffect.config.mix.size() + ")..."),
+                b -> { if (this.client != null) this.client.setScreen(new ColorScreen(this)); })
+                .dimensions(left, top + step * 3, colW, 20).build());
         toggle(left, top + step * 4, colW, () -> Text.literal("Kill-geluid: " + onOff(TomaxMCKillEffect.config.sound)),
                 () -> TomaxMCKillEffect.config.sound = !TomaxMCKillEffect.config.sound);
         toggle(left, top + step * 5, colW, () -> Text.literal("Ook door anderen: " + onOff(TomaxMCKillEffect.config.everyone)),
