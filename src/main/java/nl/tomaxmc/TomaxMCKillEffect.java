@@ -171,6 +171,15 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         return false;
     }
 
+    // Gevechtsgeluiden (hits, schade, pijlen) worden nooit verborgen, ook niet vlak bij een dood
+    public static boolean isCombatSound(String id) {
+        if (id == null) return false;
+        String s = id.toLowerCase();
+        return s.contains(".attack") || s.contains(".hurt") || s.contains(".hit")
+                || s.contains(".damage") || s.contains("knockback") || s.contains(".crit")
+                || s.contains(".sweep") || s.contains("shield") || s.contains("bow.shoot");
+    }
+
     // Vuurwerk dat nog op zijn moment wacht: {ticksOver, x, y, z}
     private static final List<double[]> pending = new ArrayList<>();
 

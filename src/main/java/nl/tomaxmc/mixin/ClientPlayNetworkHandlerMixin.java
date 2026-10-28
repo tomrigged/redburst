@@ -33,6 +33,8 @@ public class ClientPlayNetworkHandlerMixin {
     @Inject(method = "onPlaySound", at = @At("HEAD"), cancellable = true)
     private void tomaxmckilleffect$onPlaySound(PlaySoundS2CPacket packet, CallbackInfo ci) {
         if (TomaxMCKillEffect.config.hideSounds && TomaxMCKillEffect.inZone(packet.getX(), packet.getY(), packet.getZ())) {
+            // Hit- en schadegeluiden altijd laten horen
+            if (TomaxMCKillEffect.isCombatSound(packet.getSound().getIdAsString())) return;
             ci.cancel();
         }
     }
