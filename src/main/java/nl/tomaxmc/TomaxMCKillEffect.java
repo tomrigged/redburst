@@ -40,6 +40,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     public static class Config {
         public boolean players = true;
         public boolean mobs = false;
+        public int fadeMode = 0; // hoe het vuurwerk wegfade (zie FADE_NAMES)
         public int color = 0; // oud (alleen voor oude configs)
         public List<Integer> mix = null; // gekozen kleuren (index in PALETTE)
         public boolean sound = true;
@@ -72,6 +73,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             0x0044FF, 0x1111AA, 0xAA00FF, 0xCC99FF, 0xFF55CC, 0xFFAADD,
             0xFFFFFF, 0xBBBBBB
     };
+    public static final String[] FADE_NAMES = {"Zelfde kleur", "Lichter", "Donkerder", "Wit", "Geen"};
     public static final int[] RAINBOW = {0, 2, 4, 7, 11, 14};
     // Oude kleurkeuze (0-8) omzetten naar het nieuwe palet
     private static final int[][] OLD_TO_NEW = {
@@ -112,6 +114,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             config.mix = new ArrayList<>();
             for (int i : OLD_TO_NEW[old]) config.mix.add(i);
         }
+        if (config.fadeMode < 0 || config.fadeMode >= FADE_NAMES.length) config.fadeMode = 0;
         config.mix.removeIf(i -> i == null || i < 0 || i >= PALETTE.length);
         if (config.friends == null) config.friends = new ArrayList<>();
     }
@@ -430,11 +433,14 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         for (int idx : chosen) {
             int c = PALETTE[idx];
             colors.add(c);
-            // Uitdoof-kleur: een donkerdere versie van dezelfde kleur
-            int r = (int) (((c >> 16) & 0xFF) * 0.4);
-            int g = (int) (((c >> 8) & 0xFF) * 0.4);
-            int bl = (int) ((c & 0xFF) * 0.4);
-            fade.add((r << 16) | (g << 8) | bl);
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, bl = c & 0xFF;
+            switch (config.fadeMode) {
+                case 0 -> fade.add(c); // zelfde kleur
+                case 1 -> fade.add((((r + 255) / 2) << 16) | (((g + 255) / 2) << 8) | ((bl + 255) / 2)); // lichter
+                case 2 -> fade.add(((int) (r * 0.4) << 16) | ((int) (g * 0.4) << 8) | (int) (bl * 0.4)); // donkerder
+                case 3 -> { if (!fade.contains(0xFFFFFF)) fade.add(0xFFFFFF); } // wit
+                default -> { } // geen: alleen uitdoven
+            }
         }
 
         FireworkExplosionComponent bol = new FireworkExplosionComponent(

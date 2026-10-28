@@ -59,8 +59,17 @@ public class ColorScreen extends Screen {
             clearAndInit();
         }).dimensions(left + 2 * (w3 + gap), by, w3, 20).build());
 
+        addDrawableChild(ButtonWidget.builder(
+                Text.literal("Wegfaden: " + TomaxMCKillEffect.FADE_NAMES[TomaxMCKillEffect.config.fadeMode]), b -> {
+                    TomaxMCKillEffect.config.fadeMode =
+                            (TomaxMCKillEffect.config.fadeMode + 1) % TomaxMCKillEffect.FADE_NAMES.length;
+                    TomaxMCKillEffect.save();
+                    b.setMessage(Text.literal("Wegfaden: "
+                            + TomaxMCKillEffect.FADE_NAMES[TomaxMCKillEffect.config.fadeMode]));
+                }).dimensions(this.width / 2 - 100, by + 26, 200, 20).build());
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Klaar"), b -> close())
-                .dimensions(this.width / 2 - 100, by + 26, 200, 20).build());
+                .dimensions(this.width / 2 - 100, by + 52, 200, 20).build());
     }
 
     @Override
