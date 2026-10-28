@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
@@ -56,6 +57,11 @@ public class ClientPlayNetworkHandlerMixin {
         if (entity == null) return;
         if (packet.getStatus() == 3 && entity instanceof PlayerEntity) {
             TomaxMCKillEffect.addZone(entity.getX(), entity.getY() + entity.getHeight() / 2.0, entity.getZ());
+        }
+        // Dood-pakket: werkt ook als de server je geen gezondheid van anderen stuurt
+        if (packet.getStatus() == 3 && entity instanceof LivingEntity living
+                && MinecraftClient.getInstance().isOnThread()) {
+            TomaxMCKillEffect.handleDeath(MinecraftClient.getInstance(), living);
         }
         if (packet.getStatus() == 17 && TomaxMCKillEffect.config.hideFireworks
                 && entity instanceof FireworkRocketEntity) {

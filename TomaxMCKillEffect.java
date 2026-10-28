@@ -1,5 +1,6 @@
 package nl.tomaxmc;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -18,13 +19,16 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.sound.SoundEvent;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.List;
@@ -36,7 +40,8 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     public static class Config {
         public boolean players = true;
         public boolean mobs = false;
-        public int color = 0;
+        public int color = 0; // oud (alleen voor oude configs)
+        public List<Integer> mix = null; // gekozen kleuren (index in PALETTE)
         public boolean sound = true;
         public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
         public int delay = 2; // vertraging van het vuurwerk t.o.v. het geluid, in ticks (20 ticks = 1 seconde)
@@ -46,28 +51,48 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         public boolean hideParticles = true;
         public boolean hideSounds = true;
         public int hideSeconds = 25; // hoe lang na een dood de server-effecten verborgen blijven
+        // Vrienden: kills van deze spelers zie je ook
+        public boolean friendsEnabled = true;
+        public List<String> friends = new ArrayList<>();
     }
 
     public static Config config = new Config();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    public static final String[] COLOR_NAMES = {
-            "Rood", "Blauw", "Groen", "Geel", "Oranje", "Paars", "Roze", "Wit", "Regenboog"
+    // Kleurenpalet: naam + RGB. Je kunt er meerdere tegelijk aanzetten om te mixen.
+    public static final String[] PALETTE_NAMES = {
+            "Rood", "Lichtrood", "Oranje", "Perzik", "Geel", "Lichtgeel",
+            "Limoen", "Groen", "Mint", "Turquoise", "Cyaan", "Lichtblauw",
+            "Blauw", "Donkerblauw", "Paars", "Lila", "Roze", "Babyroze",
+            "Wit", "Zilver"
     };
-    private static final int[][] COLORS = {
-            {0xFF0000, 0xCC0000, 0xFF3300},
-            {0x0044FF, 0x00AAFF, 0x2222CC},
-            {0x00FF00, 0x22CC22, 0x88FF00},
-            {0xFFFF00, 0xFFCC00, 0xFFEE66},
-            {0xFF8800, 0xFF5500, 0xFFAA33},
-            {0xAA00FF, 0x7700CC, 0xDD66FF},
-            {0xFF55CC, 0xFF88DD, 0xFF2299},
-            {0xFFFFFF, 0xDDDDDD, 0xAAAAFF},
-            {0xFF0000, 0xFFAA00, 0xFFFF00, 0x00FF00, 0x00AAFF, 0xAA00FF}
+    public static final int[] PALETTE = {
+            0xFF0000, 0xFF7777, 0xFF8800, 0xFFBB88, 0xFFFF00, 0xFFFF99,
+            0x88FF00, 0x00DD00, 0x99FFAA, 0x00DDBB, 0x00FFFF, 0x88CCFF,
+            0x0044FF, 0x1111AA, 0xAA00FF, 0xCC99FF, 0xFF55CC, 0xFFAADD,
+            0xFFFFFF, 0xBBBBBB
     };
-    private static final int[] FADES = {
-            0x550000, 0x000055, 0x003300, 0x665500, 0x552200, 0x330055, 0x550033, 0x555555, 0xFFFFFF
+    public static final int[] RAINBOW = {0, 2, 4, 7, 11, 14};
+    // Oude kleurkeuze (0-8) omzetten naar het nieuwe palet
+    private static final int[][] OLD_TO_NEW = {
+            {0}, {12, 11}, {7, 6}, {4, 5}, {2, 3}, {14, 15}, {16, 17}, {18, 19}, RAINBOW
     };
+
+    public static boolean hasColor(int idx) {
+        return config.mix != null && config.mix.contains(idx);
+    }
+
+    public static void toggleColor(int idx) {
+        if (config.mix == null) config.mix = new ArrayList<>();
+        if (!config.mix.remove(Integer.valueOf(idx))) config.mix.add(idx);
+        save();
+    }
+
+    public static void setColors(int... idx) {
+        config.mix = new ArrayList<>();
+        for (int i : idx) config.mix.add(i);
+        save();
+    }
 
     private static Path configPath() {
         return FabricLoader.getInstance().getConfigDir().resolve("tomaxmckilleffect.json");
@@ -82,7 +107,31 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             }
         } catch (Exception ignored) {
         }
-        if (config.color < 0 || config.color >= COLOR_NAMES.length) config.color = 0;
+        if (config.mix == null) {
+            int old = Math.max(0, Math.min(config.color, OLD_TO_NEW.length - 1));
+            config.mix = new ArrayList<>();
+            for (int i : OLD_TO_NEW[old]) config.mix.add(i);
+        }
+        config.mix.removeIf(i -> i == null || i < 0 || i >= PALETTE.length);
+        if (config.friends == null) config.friends = new ArrayList<>();
+    }
+
+    public static boolean isFriend(String name) {
+        for (String f : config.friends) if (f.equalsIgnoreCase(name)) return true;
+        return false;
+    }
+
+    public static boolean addFriend(String name) {
+        if (name == null || name.isBlank() || isFriend(name)) return false;
+        config.friends.add(name.trim());
+        save();
+        return true;
+    }
+
+    public static boolean removeFriend(String name) {
+        boolean removed = config.friends.removeIf(f -> f.equalsIgnoreCase(name));
+        if (removed) save();
+        return removed;
     }
 
     public static void save() {
@@ -122,6 +171,12 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     // Vuurwerk dat nog op zijn moment wacht: {ticksOver, x, y, z}
     private static final List<double[]> pending = new ArrayList<>();
 
+    // Wanneer (tick) elke speler voor het laatst zijn arm zwaaide
+    private static final Map<String, Integer> lastSwing = new HashMap<>();
+    private record Death(int tick, String name, double x, double y, double z) { }
+    private static final List<Death> recentDeaths = new CopyOnWriteArrayList<>();
+    private static final double FRIEND_RANGE = 14.0; // blokken tussen vriend en slachtoffer
+
     private static LivingEntity target;
     private static int hitTick;
     public static volatile int tick;
@@ -139,6 +194,35 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                             openScreen = true;
                             return 1;
                         })
+                        .then(ClientCommandManager.literal("add")
+                                .then(ClientCommandManager.argument("naam", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            String n = StringArgumentType.getString(ctx, "naam");
+                                            ctx.getSource().sendFeedback(Text.literal(addFriend(n)
+                                                    ? n + " toegevoegd aan je vrienden."
+                                                    : n + " staat er al in."));
+                                            return 1;
+                                        })))
+                        .then(ClientCommandManager.literal("remove")
+                                .then(ClientCommandManager.argument("naam", StringArgumentType.word())
+                                        .executes(ctx -> {
+                                            String n = StringArgumentType.getString(ctx, "naam");
+                                            ctx.getSource().sendFeedback(Text.literal(removeFriend(n)
+                                                    ? n + " verwijderd."
+                                                    : n + " staat niet in je lijst."));
+                                            return 1;
+                                        })))
+                        .then(ClientCommandManager.literal("debug").executes(ctx -> {
+                            debug = !debug;
+                            ctx.getSource().sendFeedback(Text.literal("Debug: " + (debug ? "AAN" : "UIT")));
+                            return 1;
+                        }))
+                        .then(ClientCommandManager.literal("list").executes(ctx -> {
+                            ctx.getSource().sendFeedback(Text.literal(config.friends.isEmpty()
+                                    ? "Je hebt nog geen vrienden toegevoegd."
+                                    : "Vrienden: " + String.join(", ", config.friends)));
+                            return 1;
+                        }))
                         .then(ClientCommandManager.literal("test").executes(ctx -> {
                             MinecraftClient mc = MinecraftClient.getInstance();
                             if (mc.player != null) {
@@ -172,9 +256,22 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 handled.clear();
                 pending.clear();
                 zones.clear();
+                lastSwing.clear();
+                recentDeaths.clear();
+                recentChats.clear();
                 target = null;
                 return;
             }
+
+            // Onthoud wanneer spelers zwaaien (om vrienden-kills te herkennen)
+            if (config.friendsEnabled && !config.friends.isEmpty()) {
+                for (PlayerEntity p : client.world.getPlayers()) {
+                    if (p.handSwinging || p.handSwingProgress > 0.0f) {
+                        lastSwing.put(p.getName().getString().toLowerCase(), tick);
+                    }
+                }
+            }
+            recentDeaths.removeIf(d -> tick - d.tick() > 100);
 
             // Vuurwerk dat op zijn vertraging wacht
             Iterator<double[]> it = pending.iterator();
@@ -200,31 +297,39 @@ public class TomaxMCKillEffect implements ClientModInitializer {
             // Zoek alles wat nu doodgaat
             for (Entity e : client.world.getEntities()) {
                 if (!(e instanceof LivingEntity living)) continue;
-                if (living == client.player) continue;
                 if (living.getHealth() > 0.0f) continue;
-                if (!handled.add(living.getId())) continue; // al afgehandeld
-                if (living instanceof PlayerEntity) {
-                    addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
-                }
-
-                boolean mine = (living == target);
-                boolean isPlayer = living instanceof PlayerEntity;
-                boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
-                if (mine) target = null;
-                if (!typeOn) continue;
-                if (!mine && !config.everyone) continue;
-
-                celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+                handleDeath(client, living);
             }
         });
 
         // Reserve: sommige servers geven geen gezondheid door, dan lezen we de kill-melding
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            if (overlay || target == null) return;
+            if (overlay) return;
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.player == null) return;
-            if (tick - hitTick > 60) return;
             String text = message.getString();
+            recentChats.add(new Chat(tick, text.toLowerCase()));
+            recentChats.removeIf(c -> tick - c.tick() > 120);
+
+            // Vrienden: kill-melding bevat een vriend en een recent slachtoffer
+            if (config.friendsEnabled && !config.friends.isEmpty() && !recentDeaths.isEmpty()) {
+                String lower = text.toLowerCase();
+                for (Death d : recentDeaths) {
+                    if (tick - d.tick() > 80) continue;
+                    String victim = d.name().toLowerCase();
+                    if (!lower.contains(victim)) continue;
+                    for (String f : config.friends) {
+                        String fl = f.toLowerCase();
+                        if (fl.equals(victim) || !lower.contains(fl)) continue;
+                        recentDeaths.remove(d);
+                        celebrate(d.x(), d.y(), d.z());
+                        return;
+                    }
+                }
+            }
+
+            if (target == null) return;
+            if (tick - hitTick > 60) return;
             String me = mc.player.getName().getString();
             String them = target.getName().getString();
             if (text.contains(me) && text.contains(them)) {
@@ -233,6 +338,71 @@ public class TomaxMCKillEffect implements ClientModInitializer {
                 target = null;
             }
         });
+    }
+
+    public static boolean debug = false;
+    private record Chat(int tick, String lower) { }
+    private static final List<Chat> recentChats = new CopyOnWriteArrayList<>();
+
+    private static void dbg(MinecraftClient client, String msg) {
+        if (debug && client.inGameHud != null) {
+            client.inGameHud.getChatHud().addMessage(Text.literal("[TomaxMC] " + msg));
+        }
+    }
+
+    /** Wordt aangeroepen als er iets doodgaat (via gezondheid of via het dood-pakket van de server). */
+    public static void handleDeath(MinecraftClient client, LivingEntity living) {
+        if (client.world == null || client.player == null) return;
+        if (living == client.player) return;
+        if (!handled.add(living.getId())) return; // al afgehandeld
+        if (living instanceof PlayerEntity) {
+            addZone(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+        }
+
+        boolean mine = (living == target);
+        boolean isPlayer = living instanceof PlayerEntity;
+        boolean typeOn = (isPlayer && config.players) || (!isPlayer && config.mobs);
+        if (mine) target = null;
+        if (!typeOn) {
+            dbg(client, "Dood: " + living.getName().getString() + " (type staat uit)");
+            return;
+        }
+        boolean friendKill = !mine && !config.everyone && killedByFriend(client, living);
+        dbg(client, "Dood: " + living.getName().getString() + " | van mij: " + mine + " | vriend: " + friendKill);
+        if (!mine && !config.everyone && !friendKill) {
+            // Bewaar voor de chat-reserve (bijv. vriend schiet met een boog)
+            recentDeaths.add(new Death(tick, living.getName().getString(),
+                    living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ()));
+            return;
+        }
+        celebrate(living.getX(), living.getY() + living.getHeight() / 2.0, living.getZ());
+    }
+
+    private static boolean killedByFriend(MinecraftClient client, LivingEntity victim) {
+        if (!config.friendsEnabled || config.friends.isEmpty() || client.world == null) return false;
+        String victimName = victim.getName().getString().toLowerCase();
+
+        // 1) Een vriend was in de buurt en zwaaide net
+        for (PlayerEntity p : client.world.getPlayers()) {
+            if (p == victim || p == client.player) continue;
+            String name = p.getName().getString();
+            if (!isFriend(name)) continue;
+            Integer swung = lastSwing.get(name.toLowerCase());
+            boolean swingingNow = p.handSwinging || p.handSwingProgress > 0.0f;
+            boolean recent = swingingNow || (swung != null && tick - swung <= 25);
+            if (recent && p.squaredDistanceTo(victim) <= FRIEND_RANGE * FRIEND_RANGE) return true;
+        }
+
+        // 2) Er kwam net een chat-melding met een vriend en dit slachtoffer
+        for (Chat c : recentChats) {
+            if (tick - c.tick() > 100) continue;
+            if (!c.lower().contains(victimName)) continue;
+            for (String f : config.friends) {
+                String fl = f.toLowerCase();
+                if (!fl.equals(victimName) && c.lower().contains(fl)) return true;
+            }
+        }
+        return false;
     }
 
     private static void celebrate(double x, double y, double z) {
@@ -254,9 +424,18 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
 
-        int i = Math.max(0, Math.min(config.color, COLORS.length - 1));
-        IntList colors = new IntArrayList(COLORS[i]);
-        IntList fade = new IntArrayList(new int[]{FADES[i]});
+        IntList colors = new IntArrayList();
+        IntList fade = new IntArrayList();
+        List<Integer> chosen = (config.mix == null || config.mix.isEmpty()) ? List.of(0) : config.mix;
+        for (int idx : chosen) {
+            int c = PALETTE[idx];
+            colors.add(c);
+            // Uitdoof-kleur: een donkerdere versie van dezelfde kleur
+            int r = (int) (((c >> 16) & 0xFF) * 0.4);
+            int g = (int) (((c >> 8) & 0xFF) * 0.4);
+            int bl = (int) ((c & 0xFF) * 0.4);
+            fade.add((r << 16) | (g << 8) | bl);
+        }
 
         FireworkExplosionComponent bol = new FireworkExplosionComponent(
                 FireworkExplosionComponent.Type.LARGE_BALL, colors, fade, true, true);
