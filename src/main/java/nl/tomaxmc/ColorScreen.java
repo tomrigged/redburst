@@ -59,6 +59,7 @@ public class ColorScreen extends Screen {
             clearAndInit();
         }).dimensions(left + 2 * (w3 + gap), by, w3, 20).build());
 
+        int half = (totalW - gap) / 2;
         addDrawableChild(ButtonWidget.builder(
                 Text.literal("Wegfaden: " + TomaxMCKillEffect.FADE_NAMES[TomaxMCKillEffect.config.fadeMode]), b -> {
                     TomaxMCKillEffect.config.fadeMode =
@@ -66,7 +67,13 @@ public class ColorScreen extends Screen {
                     TomaxMCKillEffect.save();
                     b.setMessage(Text.literal("Wegfaden: "
                             + TomaxMCKillEffect.FADE_NAMES[TomaxMCKillEffect.config.fadeMode]));
-                }).dimensions(this.width / 2 - 100, by + 26, 200, 20).build());
+                }).dimensions(left, by + 26, half, 20).build());
+
+        ButtonWidget ratio = ButtonWidget.builder(Text.literal("Verhouding..."),
+                b -> { if (this.client != null) this.client.setScreen(new WeightScreen(this)); })
+                .dimensions(left + half + gap, by + 26, half, 20).build();
+        ratio.active = TomaxMCKillEffect.config.mix != null && TomaxMCKillEffect.config.mix.size() >= 2;
+        addDrawableChild(ratio);
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Klaar"), b -> close())
                 .dimensions(this.width / 2 - 100, by + 52, 200, 20).build());

@@ -42,6 +42,7 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         public boolean mobs = false;
         public int fadeMode = 0; // hoe het vuurwerk wegfade (zie FADE_NAMES)
         public int color = 0; // oud (alleen voor oude configs)
+        public Map<Integer, Integer> weights = null; // verhouding per kleur in procenten (palet-index -> %)
         public List<Integer> mix = null; // gekozen kleuren (index in PALETTE)
         public boolean sound = true;
         public boolean everyone = false; // ook doden die niet door jou komen (creeper, valschade, ...)
@@ -87,12 +88,14 @@ public class TomaxMCKillEffect implements ClientModInitializer {
     public static void toggleColor(int idx) {
         if (config.mix == null) config.mix = new ArrayList<>();
         if (!config.mix.remove(Integer.valueOf(idx))) config.mix.add(idx);
+        config.weights = null; // verhouding opnieuw gelijk verdelen
         save();
     }
 
     public static void setColors(int... idx) {
         config.mix = new ArrayList<>();
         for (int i : idx) config.mix.add(i);
+        config.weights = null;
         save();
     }
 
@@ -439,16 +442,45 @@ public class TomaxMCKillEffect implements ClientModInitializer {
         IntList colors = new IntArrayList();
         IntList fade = new IntArrayList();
         List<Integer> chosen = (config.mix == null || config.mix.isEmpty()) ? List.of(0) : config.mix;
-        for (int idx : chosen) {
-            int c = PALETTE[idx];
-            colors.add(c);
+
+        // Verhouding: een kleur met meer % komt vaker voor in de lijst (de server kiest willekeurig uit die lijst)
+        final int SLOTS = 40;
+        int n = chosen.size();
+        int[] slots = new int[n];
+        double sum = 0;
+        boolean useWeights = config.weights != null && n > 1;
+        if (useWeights) {
+            for (int i = 0; i < n; i++) {
+                Integer v = config.weights.get(chosen.get(i));
+                if (v == null) { useWeights = false; break; }
+                sum += Math.max(0, v);
+            }
+            if (sum <= 0) useWeights = false;
+        }
+        int total = 0;
+        for (int i = 0; i < n; i++) {
+            if (useWeights) {
+                int v = Math.max(0, config.weights.get(chosen.get(i)));
+                slots[i] = v == 0 ? 0 : Math.max(1, (int) Math.round(SLOTS * v / sum));
+            } else {
+                slots[i] = 1;
+            }
+            total += slots[i];
+        }
+        if (total == 0) java.util.Arrays.fill(slots, 1);
+
+        for (int i = 0; i < n; i++) {
+            int c = PALETTE[chosen.get(i)];
             int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, bl = c & 0xFF;
-            switch (config.fadeMode) {
-                case 0 -> fade.add(c); // zelfde kleur
-                case 1 -> fade.add((((r + 255) / 2) << 16) | (((g + 255) / 2) << 8) | ((bl + 255) / 2)); // lichter
-                case 2 -> fade.add(((int) (r * 0.4) << 16) | ((int) (g * 0.4) << 8) | (int) (bl * 0.4)); // donkerder
-                case 3 -> { if (!fade.contains(0xFFFFFF)) fade.add(0xFFFFFF); } // wit
-                default -> { } // geen: alleen uitdoven
+            for (int k = 0; k < slots[i]; k++) {
+                colors.add(c);
+                switch (config.fadeMode) {
+                    case 0 -> fade.add(c); // zelfde kleur
+                    case 1 -> fade.add((((r + 255) / 2) << 16) | (((g + 255) / 2) << 8) | ((bl + 255) / 2)); // lichter
+                    case 2 -> fade.add(((int) (r * 0.4) << 16) | ((int) (g * 0.4) << 8) | (int) (bl * 0.4)); // donkerder
+                    case 3 -> { if (!fade.contains(0xFFFFFF)) fade.add(0xFFFFFF); } // wit
+                    default -> { } // geen: alleen uitdoven
+                }
             }
         }
 
