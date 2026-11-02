@@ -1,15 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "tomaxmckilleffect",
+  "id": "redburst",
   "version": "${version}",
-  "name": "TomaxMC Kill Effect",
-  "description": "Firework explotion and sound effect kill mod",
-  "icon": "assets/tomaxmckilleffect/icon.png",
+  "name": "Red Burst",
+  "description": "Vuurwerk-explosie als je iemand killt. Instellingen via Mod Menu of /redburst.",
   "environment": "client",
-  "mixins": ["tomaxmckilleffect.mixins.json"],
+  "mixins": ["redburst.mixins.json"],
   "entrypoints": {
-    "client": ["nl.tomaxmc.TomaxMCKillEffect"],
-    "modmenu": ["nl.tomaxmc.ModMenuIntegration"]
+    "client": ["nl.redburst.RedBurst"],
+    "modmenu": ["nl.redburst.ModMenuIntegration"]
   },
   "depends": { "fabricloader": ">=0.18.1", "minecraft": "1.21.11", "java": ">=21", "fabric-api": "*" },
   "suggests": { "modmenu": "*" }

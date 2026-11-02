@@ -9,15 +9,23 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.item.AxeItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.MaceItem;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.component.type.FireworkExplosionComponent;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.sound.SoundEvent;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 
@@ -46,6 +54,7 @@ public class RedBurst implements ClientModInitializer {
         public boolean hideParticles = true;
         public boolean hideSounds = true;
         public int hideSeconds = 25; // hoe lang na een dood de server-effecten verborgen blijven
+        public int sensitivityPercent = 0; // 0 = niet aangepast; anders 100-200
     }
 
     public static Config config = new Config();
@@ -100,6 +109,10 @@ public class RedBurst implements ClientModInitializer {
     public static final int[] DELAYS = {0, 1, 2, 3, 4, 6, 8, 10};
 
     // Plekken waar net iemand doodging: server-deeltjes/geluiden daar worden verborgen
+    public static final int[] SENSITIVITY_STEPS = {100, 125, 150, 175, 200};
+    public static KeyBinding axeKey;
+    public static KeyBinding maceKey;
+
     public static final int[] DURATIONS = {5, 10, 20, 25, 30, 45, 60}; // seconden
     private static final double ZONE_RADIUS = 12.0; // blokken
     private static final List<double[]> zones = new CopyOnWriteArrayList<>(); // {tick, x, y, z}
@@ -131,6 +144,11 @@ public class RedBurst implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         load();
+
+        axeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.redburst.axe", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.redburst"));
+        maceKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.redburst.mace", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.redburst"));
 
         // Commando: /redburst (instellingen) en /redburst test (proefvuurwerk)
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
@@ -164,6 +182,10 @@ public class RedBurst implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             tick++;
+
+            while (axeKey.wasPressed()) switchToWeapon(client, AxeItem.class);
+            while (maceKey.wasPressed()) switchToWeapon(client, MaceItem.class);
+
             if (openScreen) {
                 openScreen = false;
                 client.setScreen(new RedBurstScreen(null));
@@ -233,6 +255,25 @@ public class RedBurst implements ClientModInitializer {
                 target = null;
             }
         });
+    }
+
+    // Wisselt je hotbar-selectie naar de eerste bijl of mace die je bij je hebt
+    private static void switchToWeapon(MinecraftClient client, Class<?> itemClass) {
+        if (client.player == null || client.getNetworkHandler() == null) return;
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = client.player.getInventory().getStack(slot);
+            if (itemClass.isInstance(stack.getItem())) {
+                client.player.getInventory().selectedSlot = slot;
+                client.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+                return;
+            }
+        }
+    }
+
+    public static void applySensitivity() {
+        if (config.sensitivityPercent <= 0) return;
+        MinecraftClient mc = MinecraftClient.getInstance();
+        mc.options.getSensitivity().setValue(config.sensitivityPercent / 200.0);
     }
 
     private static void celebrate(double x, double y, double z) {

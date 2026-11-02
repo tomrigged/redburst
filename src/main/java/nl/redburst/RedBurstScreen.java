@@ -79,6 +79,22 @@ public class RedBurstScreen extends Screen {
         toggle(right, top + step * 4, colW, () -> Text.literal("Geluid: " + onOff(RedBurst.config.hideSounds)),
                 () -> RedBurst.config.hideSounds = !RedBurst.config.hideSounds);
 
+        toggle(left, top + step * 7, colW, () -> Text.literal("Muisgevoeligheid: "
+                        + (RedBurst.config.sensitivityPercent <= 0 ? "standaard" : RedBurst.config.sensitivityPercent + "%")),
+                () -> {
+                    int[] s = RedBurst.SENSITIVITY_STEPS;
+                    int cur = RedBurst.config.sensitivityPercent;
+                    int next = 0;
+                    for (int v : s) {
+                        if (v > cur) {
+                            next = v;
+                            break;
+                        }
+                    }
+                    RedBurst.config.sensitivityPercent = next;
+                    RedBurst.applySensitivity();
+                });
+
         toggle(right, top + step * 5, colW, () -> Text.literal("Verberg-duur: " + RedBurst.config.hideSeconds + " sec"),
                 () -> {
                     int[] d = RedBurst.DURATIONS;
