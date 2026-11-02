@@ -110,6 +110,8 @@ public class RedBurst implements ClientModInitializer {
 
     // Plekken waar net iemand doodging: server-deeltjes/geluiden daar worden verborgen
     public static final int[] SENSITIVITY_STEPS = {100, 125, 150, 175, 200};
+    public static final KeyBinding.Category KEY_CATEGORY =
+            KeyBinding.Category.create(Identifier.of("redburst", "main"));
     public static KeyBinding axeKey;
     public static KeyBinding maceKey;
 
@@ -146,9 +148,9 @@ public class RedBurst implements ClientModInitializer {
         load();
 
         axeKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.redburst.axe", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.redburst"));
+                "key.redburst.axe", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, KEY_CATEGORY));
         maceKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.redburst.mace", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.redburst"));
+                "key.redburst.mace", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, KEY_CATEGORY));
 
         // Commando: /redburst (instellingen) en /redburst test (proefvuurwerk)
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
@@ -263,7 +265,7 @@ public class RedBurst implements ClientModInitializer {
         for (int slot = 0; slot < 9; slot++) {
             ItemStack stack = client.player.getInventory().getStack(slot);
             if (itemClass.isInstance(stack.getItem())) {
-                client.player.getInventory().selectedSlot = slot;
+                client.player.getInventory().setSelectedSlot(slot);
                 client.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
                 return;
             }
@@ -273,7 +275,7 @@ public class RedBurst implements ClientModInitializer {
     public static void applySensitivity() {
         if (config.sensitivityPercent <= 0) return;
         MinecraftClient mc = MinecraftClient.getInstance();
-        mc.options.getSensitivity().setValue(config.sensitivityPercent / 200.0);
+        mc.options.getMouseSensitivity().setValue(config.sensitivityPercent / 200.0);
     }
 
     private static void celebrate(double x, double y, double z) {
